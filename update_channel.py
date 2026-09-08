@@ -2,51 +2,48 @@ import os
 import requests
 import json
 import random
-from datetime import datetime, timezone
+import sys
 
 # ==============================================================
-# CONFIGURACIÓN (tomada de variables de entorno en GitHub Actions)
+# CONFIGURACIÓN
 # ==============================================================
 ARENA_TOKEN = os.environ.get('ARENA_WRITE_TOKEN')
 CHANNEL_SLUG = os.environ.get('CHANNEL_SLUG', 'mi-canal-prueba')
-LIMIT = 50  # Número de imágenes a subir
+LIMIT = 50
 
 # ==============================================================
-# 1. GENERAR IMÁGENES DESDE PICSUM (sin autenticación)
+# 1. GENERAR IMÁGENES DESDE PICSUM
 # ==============================================================
 def fetch_images_from_picsum(count=50):
-    """
-    Genera URLs de imágenes aleatorias de Lorem Picsum.
-    Usa diferentes semillas para obtener imágenes distintas.
-    """
     image_urls = []
-    # Generamos semillas aleatorias únicas
     seeds = random.sample(range(1, 100000), count)
     for seed in seeds:
-        # Tamaño fijo 1920x1080, pero puedes ajustarlo
         url = f"https://picsum.photos/seed/{seed}/1920/1080"
         image_urls.append(url)
     return image_urls
 
 # ==============================================================
-# 2. CONECTAR CON ARENA (leer, eliminar, subir)
+# 2. FUNCIONES DE ARENA CON DIAGNÓSTICO
 # ==============================================================
 def get_channel_id(slug, token):
-    """Obtiene el ID interno del canal a partir del slug."""
     url = f"https://api.are.na/v2/channels/{slug}"
     headers = {'Authorization': f'Bearer {token}'}
     resp = requests.get(url, headers=headers)
     
-    # 🔍 DIAGNÓSTICO: Imprime los permisos reales del token
-    auth_scope = resp.headers.get('X-Auth-Scope')
-    print(f"🔍 Permisos del token (X-Auth-Scope): {auth_scope}")
+    # 🔍 DIAGNÓSTICO: Mostrar el scope real del token
+    scope = resp.headers.get('X-Auth-Scope')
+    print(f"🔍 Permisos del token: {scope}")
+    
+    if scope != 'write':
+        print(f"❌ El token tiene permisos '{scope}', se requiere 'write'.")
+        print("   Genera un nuevo token en Are.na con permisos 'Read + Write'.")
+        sys.exit(1)
     
     resp.raise_for_status()
     data = resp.json()
     return data['id']
 
 def get_channel_blocks(slug, token):
-    """Obtiene todos los bloques actuales del canal."""
     url = f"https://api.are.na/v2/channels/{slug}?per=100"
     headers = {'Authorization': f'Bearer {token}'}
     resp = requests.get(url, headers=headers)
@@ -55,7 +52,6 @@ def get_channel_blocks(slug, token):
     return data.get('contents', [])
 
 def delete_block(block_id, token):
-    """Elimina un bloque específico de Are.na."""
     url = f"https://api.are.na/v2/blocks/{block_id}"
     headers = {'Authorization': f'Bearer {token}'}
     resp = requests.delete(url, headers=headers)
@@ -63,7 +59,6 @@ def delete_block(block_id, token):
     print(f"   🗑️ Eliminado bloque {block_id}")
 
 def upload_image_to_channel(channel_id, image_url, token):
-    """Sube una imagen (por URL) al canal de Are.na."""
     url = f"https://api.are.na/v2/channels/{channel_id}/blocks"
     headers = {
         'Authorization': f'Bearer {token}',
@@ -84,17 +79,12 @@ def main():
 
     print(f"🚀 Iniciando actualización diaria para el canal: {CHANNEL_SLUG}")
     
-    # 3.1 Generar imágenes (usando Picsum)
+    # 3.1 Generar imágenes
     print(f"📸 Generando {LIMIT} imágenes desde Picsum...")
     new_images = fetch_images_from_picsum(LIMIT)
-    
-    if len(new_images) < 10:
-        print(f"⚠️ Solo se generaron {len(new_images)} imágenes. Se necesitan al menos 10 para continuar.")
-        return 1
-    
     print(f"✅ Se generaron {len(new_images)} imágenes.")
     
-    # 3.2 Obtener ID del canal
+    # 3.2 Obtener ID del canal (con verificación de permisos)
     try:
         channel_id = get_channel_id(CHANNEL_SLUG, ARENA_TOKEN)
         print(f"📡 ID del canal: {channel_id}")
@@ -110,7 +100,7 @@ def main():
         print(f"❌ Error al leer bloques: {e}")
         return 1
     
-    # 3.4 Eliminar TODOS los bloques existentes
+    # 3.4 Eliminar bloques existentes
     if current_blocks:
         print(f"🧹 Eliminando {len(current_blocks)} bloques antiguos...")
         for block in current_blocks:
@@ -121,7 +111,7 @@ def main():
     else:
         print("✅ El canal ya estaba vacío.")
     
-    # 3.5 Subir las nuevas imágenes
+    # 3.5 Subir nuevas imágenes
     print(f"⬆️ Subiendo {len(new_images)} imágenes al canal...")
     success_count = 0
     for idx, img_url in enumerate(new_images):
