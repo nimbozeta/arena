@@ -8,55 +8,26 @@ from datetime import datetime, timezone
 # CONFIGURACIÓN (tomada de variables de entorno en GitHub Actions)
 # ==============================================================
 ARENA_TOKEN = os.environ.get('ARENA_WRITE_TOKEN')
-CHANNEL_SLUG = os.environ.get('CHANNEL_SLUG', 'mi-canal-prueba')  # Reemplaza o usa secret
-REDDIT_SUBREDDIT = os.environ.get('REDDIT_SUBREDDIT', 'wallpaper')
-LIMIT = 50  # Número de imágenes a obtener y subir
+CHANNEL_SLUG = os.environ.get('CHANNEL_SLUG', 'mi-canal-prueba')
+LIMIT = 50  # Número de imágenes a subir
 
 # ==============================================================
-# 1. OBTENER IMÁGENES DE REDDIT (usando JSON público)
+# 1. GENERAR IMÁGENES DESDE PICSUM (sin autenticación)
 # ==============================================================
-import xml.etree.ElementTree as ET
+def fetch_images_from_picsum(count=50):
+    """
+    Genera URLs de imágenes aleatorias de Lorem Picsum.
+    Usa diferentes semillas para obtener imágenes distintas.
+    """
+    image_urls = []
+    # Generamos semillas aleatorias únicas
+    seeds = random.sample(range(1, 100000), count)
+    for seed in seeds:
+        # Tamaño fijo 1920x1080, pero puedes ajustarlo
+        url = f"https://picsum.photos/seed/{seed}/1920/1080"
+        image_urls.append(url)
+    return image_urls
 
-def fetch_reddit_images(subreddit, limit=50):
-    """
-    Obtiene URLs de imágenes de un subreddit usando su feed RSS.
-    No requiere autenticación y evita el bloqueo 403.
-    """
-    # Usamos el feed RSS del subreddit (hot)
-    url = f"https://www.reddit.com/r/{subreddit}/.rss"
-    headers = {'User-Agent': 'Mozilla/5.0 (compatible; Bot/1.0)'}
-    
-    try:
-        response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status()
-        
-        # Parsear el XML del feed RSS
-        root = ET.fromstring(response.content)
-        
-        # Namespace de RSS
-        ns = {'': 'http://www.w3.org/2005/Atom'}
-        
-        image_urls = []
-        for entry in root.findall('.//entry', ns):
-            # Buscar enlaces dentro del contenido HTML de la entrada
-            content = entry.find('content', ns)
-            if content is not None and content.text:
-                # Buscar URLs de imágenes en el contenido HTML
-                # Patrón simple: buscar src="..." que apunte a i.redd.it o external-preview
-                import re
-                img_pattern = r'src="(https?://[^"]+\.(?:jpg|jpeg|png|gif))"'
-                found = re.findall(img_pattern, content.text)
-                for img_url in found:
-                    # Limpiar URLs (eliminar parámetros extra)
-                    img_url = img_url.split('?')[0]
-                    if img_url not in image_urls:
-                        image_urls.append(img_url)
-        
-        return image_urls[:limit]
-    
-    except Exception as e:
-        print(f"❌ Error al obtener imágenes desde RSS: {e}")
-        return []
 # ==============================================================
 # 2. CONECTAR CON ARENA (leer, eliminar, subir)
 # ==============================================================
@@ -93,7 +64,6 @@ def upload_image_to_channel(channel_id, image_url, token):
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json'
     }
-    # La API permite subir por URL usando "source"
     payload = json.dumps({"source": image_url})
     resp = requests.post(url, headers=headers, data=payload)
     resp.raise_for_status()
@@ -109,15 +79,15 @@ def main():
 
     print(f"🚀 Iniciando actualización diaria para el canal: {CHANNEL_SLUG}")
     
-    # 3.1 Obtener imágenes de Reddit
-    print(f"📸 Buscando {LIMIT} imágenes en r/{REDDIT_SUBREDDIT}...")
-    new_images = fetch_reddit_images(REDDIT_SUBREDDIT, LIMIT)
+    # 3.1 Generar imágenes (usando Picsum)
+    print(f"📸 Generando {LIMIT} imágenes desde Picsum...")
+    new_images = fetch_images_from_picsum(LIMIT)
     
     if len(new_images) < 10:
-        print(f"⚠️ Solo se encontraron {len(new_images)} imágenes. Se necesitan al menos 10 para continuar.")
+        print(f"⚠️ Solo se generaron {len(new_images)} imágenes. Se necesitan al menos 10 para continuar.")
         return 1
     
-    print(f"✅ Se obtuvieron {len(new_images)} imágenes válidas.")
+    print(f"✅ Se generaron {len(new_images)} imágenes.")
     
     # 3.2 Obtener ID del canal
     try:
@@ -135,9 +105,7 @@ def main():
         print(f"❌ Error al leer bloques: {e}")
         return 1
     
-    # 3.4 Decisión de limpieza: Eliminar TODOS los bloques actuales
-    #     (así el tablero siempre tiene exactamente las últimas 50 imágenes).
-    #     Si prefieres eliminar solo los más antiguos, cambia esta lógica.
+    # 3.4 Eliminar TODOS los bloques existentes
     if current_blocks:
         print(f"🧹 Eliminando {len(current_blocks)} bloques antiguos...")
         for block in current_blocks:
