@@ -36,6 +36,11 @@ def get_channel_id(slug, token):
     url = f"https://api.are.na/v2/channels/{slug}"
     headers = {'Authorization': f'Bearer {token}'}
     resp = requests.get(url, headers=headers)
+    
+    # 🔍 DIAGNÓSTICO: Imprime los permisos reales del token
+    auth_scope = resp.headers.get('X-Auth-Scope')
+    print(f"🔍 Permisos del token (X-Auth-Scope): {auth_scope}")
+    
     resp.raise_for_status()
     data = resp.json()
     return data['id']
