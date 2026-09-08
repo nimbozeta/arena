@@ -1,11 +1,8 @@
 name: Actualización Diaria del Tablero
 
-#forzar deteccion
 on:
   schedule:
-    # Cron: Se ejecuta todos los días a las 10:00 AM UTC (ajústalo a tu zona horaria)
     - cron: '0 10 * * *'
-  # Permite ejecutarlo manualmente desde la pestaña Actions (para pruebas)
   workflow_dispatch:
 
 jobs:
