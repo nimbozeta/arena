@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instalación Generativa · Are.na Meme</title>
+    <style>
+        /* --- RESET Y FULLSCREEN --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0a;
+            overflow: hidden;
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+        }
+
+        /* --- CONTENEDOR PRINCIPAL --- */
+        #meme-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: #111;
+        }
+
+        /* --- IMAGEN DE FONDO --- */
+        #bg-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: opacity 0.8s ease-in-out;
+            opacity: 1;
+            background: #222;
+        }
+
+        /* --- TEXTOS SUPERPUESTOS (ESTILO MEME) --- */
+        .meme-text {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 4.5vw;
+            font-weight: 900;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            text-shadow:
+                -3px -3px 0 #000,
+                3px -3px 0 #000,
+                -3px 3px 0 #000,
+                3px 3px 0 #000,
+                0 0 10px rgba(0, 0, 0, 0.8);
+            padding: 0 2%;
+            z-index: 10;
+            pointer-events: none;
+            line-height: 1.2;
+            word-break: break-word;
+            transition: opacity 0.8s ease-in-out;
+        }
+
+        #top-text {
+            top: 5%;
+        }
+
+        #bottom-text {
+            bottom: 5%;
+        }
+
+        /* --- CONTROLES DE USUARIO (DURACIÓN) --- */
+        #controls {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            padding: 14px 22px;
+            border-radius: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            z-index: 999;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            pointer-events: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+        }
+
+        #controls label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.85rem;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        #duration-slider {
+            width: 140px;
+            height: 4px;
+            -webkit-appearance: none;
+            background: linear-gradient(90deg, #888, #fff);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        #duration-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #222;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        #duration-display {
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            min-width: 50px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        /* Indicador de estado (opcional) */
+        #status-badge {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: rgba(255, 255, 255, 0.3);
+            font-family: monospace;
+            font-size: 0.7rem;
+            z-index: 999;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 4px 12px;
+            border-radius: 20px;
+            pointer-events: none;
+            letter-spacing: 0.5px;
+        }
+
+        /* RESPONSIVE: fuentes más pequeñas en móviles */
+        @media (max-width: 600px) {
+            .meme-text {
+                font-size: 8vw;
+            }
+            #controls {
+                bottom: 16px;
+                right: 16px;
+                padding: 12px 16px;
+                gap: 12px;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                border-radius: 30px;
+            }
+            #duration-slider {
+                width: 100px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- CONTENEDOR DEL MEME -->
+    <div id="meme-container">
+        <img id="bg-image" src="" alt="Fondo" />
+        <div id="top-text" class="meme-text">TEXTO SUPERIOR</div>
+        <div id="bottom-text" class="meme-text">TEXTO INFERIOR</div>
+    </div>
+
+    <!-- BADGE DE ESTADO -->
+    <div id="status-badge">● MOCK DATA · CICLO ACTIVO</div>
+
+    <!-- CONTROLES DE USUARIO -->
+    <div id="controls">
+        <label for="duration-slider">⏱ Duración</label>
+        <input type="range" id="duration-slider" min="5" max="120" value="20" step="1" />
+        <span id="duration-display">20s</span>
+    </div>
+
+    <script>
+        // --------------------------------------------------------------
+        // 1. DATOS DE PRUEBA (MOCK) - Reemplazaremos con Are.na en Fase 2
+        // --------------------------------------------------------------
+        const MOCK_IMAGES = [
+            'https://picsum.photos/seed/a1/1920/1080',
+            'https://picsum.photos/seed/b2/1920/1080',
+            'https://picsum.photos/seed/c3/1920/1080',
+            'https://picsum.photos/seed/d4/1920/1080',
+            'https://picsum.photos/seed/e5/1920/1080',
+        ];
+
+        const MOCK_TOP_TEXTS = [
+            'EL ARTE ES LA MENTIRA',
+            'LA NATURALEZA NO TIENE PRISA',
+            'TODO LO SÓLIDO SE DESVANECE',
+            'EL FUTURO YA ESTÁ AQUÍ',
+            'LA MEMORIA ES UN BOSQUE',
+        ];
+
+        const MOCK_BOTTOM_TEXTS = [
+            'QUE NOS AYUDA A VER LA VERDAD',
+            'PERO TODO SE TRANSFORMA',
+            'EN EL AIRE DE LA NOCHE',
+            'SOLO QUE NO ESTÁ REPARTIDO',
+            'QUE CAMBIA CON CADA RESPIRACIÓN',
+        ];
+
+        // --------------------------------------------------------------
+        // 2. REFERENCIAS AL DOM
+        // --------------------------------------------------------------
+        const bgImage = document.getElementById('bg-image');
+        const topText = document.getElementById('top-text');
+        const bottomText = document.getElementById('bottom-text');
+        const slider = document.getElementById('duration-slider');
+        const display = document.getElementById('duration-display');
+
+        // Variables de estado
+        let currentInterval = null;
+        let currentDuration = parseInt(slider.value, 10); // segundos
+        let currentIndex = 0;
+
+        // --------------------------------------------------------------
+        // 3. FUNCIÓN PARA ACTUALIZAR UN FOTOGRAMA (con fade)
+        // --------------------------------------------------------------
+        function updateFrame() {
+            // Elegir siguiente índice (cíclico)
+            currentIndex = (currentIndex + 1) % MOCK_IMAGES.length;
+
+            // Obtener datos del nuevo frame
+            const newImageUrl = MOCK_IMAGES[currentIndex];
+            const newTop = MOCK_TOP_TEXTS[currentIndex % MOCK_TOP_TEXTS.length];
+            const newBottom = MOCK_BOTTOM_TEXTS[currentIndex % MOCK_BOTTOM_TEXTS.length];
+
+            // --- Efecto de fade out/in ---
+            // Paso 1: Bajar opacidad de imagen y textos
+            bgImage.style.opacity = '0';
+            topText.style.opacity = '0';
+            bottomText.style.opacity = '0';
+
+            // Paso 2: Después de 400ms (mitad del fade), cambiar el contenido
+            setTimeout(() => {
+                bgImage.src = newImageUrl;
+                topText.textContent = newTop;
+                bottomText.textContent = newBottom;
+
+                // Paso 3: Subir opacidad (fade in)
+                bgImage.style.opacity = '1';
+                topText.style.opacity = '1';
+                bottomText.style.opacity = '1';
+            }, 400);
+        }
+
+        // --------------------------------------------------------------
+        // 4. INICIALIZACIÓN DEL PRIMER FOTOGRAMA (sin fade al inicio)
+        // --------------------------------------------------------------
+        function setInitialFrame() {
+            currentIndex = 0;
+            bgImage.src = MOCK_IMAGES[0];
+            bgImage.style.opacity = '1';
+            topText.textContent = MOCK_TOP_TEXTS[0];
+            topText.style.opacity = '1';
+            bottomText.textContent = MOCK_BOTTOM_TEXTS[0];
+            bottomText.style.opacity = '1';
+        }
+
+        // --------------------------------------------------------------
+        // 5. GESTIÓN DEL CICLO (iniciar / reiniciar)
+        // --------------------------------------------------------------
+        function startCycle(durationSeconds) {
+            // Limpiar intervalo anterior si existe
+            if (currentInterval) {
+                clearInterval(currentInterval);
+                currentInterval = null;
+            }
+
+            // Si la duración es menor a 1, no arrancamos (seguridad)
+            const ms = Math.max(durationSeconds * 1000, 1000);
+
+            // Programar el primer cambio después de 'durationSeconds'
+            // (el intervalo llama a updateFrame)
+            currentInterval = setInterval(updateFrame, ms);
+
+            // Actualizar badge (opcional)
+            document.getElementById('status-badge').textContent =
+                `● MOCK · CICLO ${durationSeconds}s`;
+        }
+
+        // --------------------------------------------------------------
+        // 6. MANEJADOR DEL SLIDER (cambio en tiempo real)
+        // --------------------------------------------------------------
+        slider.addEventListener('input', function() {
+            const val = parseInt(this.value, 10);
+            currentDuration = val;
+            display.textContent = val + 's';
+
+            // Reiniciamos el ciclo con la nueva duración
+            // (esto hace que el cambio sea inmediato, sin esperar al tick actual)
+            startCycle(currentDuration);
+        });
+
+        // --------------------------------------------------------------
+        // 7. ARRANQUE DE LA PIEZA
+        // --------------------------------------------------------------
+        // Poner el primer frame
+        setInitialFrame();
+
+        // Iniciar ciclo con la duración por defecto (20s)
+        startCycle(currentDuration);
+
+        // Log en consola para verificar que todo está bien
+        console.log('✅ Fase 1 completada. Mock data corriendo. Duración configurable.');
+        console.log(`📸 Imágenes mock: ${MOCK_IMAGES.length}`);
+        console.log(`📝 Textos mock: ${MOCK_TOP_TEXTS.length} top / ${MOCK_BOTTOM_TEXTS.length} bottom`);
+        console.log('⏱️ Mueve el slider para cambiar la duración en tiempo real.');
+    </script>
+</body>
+</html>
