@@ -24,8 +24,8 @@ jobs:
           pip install requests
       
       - name: Ejecutar script de actualización
-        env:
-          ARENA_WRITE_TOKEN: ${{ secrets.ARENA_WRITE_TOKEN }}
-          CHANNEL_SLUG: ${{ secrets.CHANNEL_SLUG }}
-        run: |
-          python update_channel.py
+  env:
+    ARENA_WRITE_TOKEN: ${{ secrets.ARENA_WRITE_TOKEN }}
+    CHANNEL_SLUG: ${{ secrets.CHANNEL_SLUG }}
+  run: |
+    python test_token.py
