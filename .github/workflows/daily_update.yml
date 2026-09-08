@@ -1,0 +1,34 @@
+name: Actualización Diaria del Tablero
+
+on:
+  schedule:
+    # Cron: Se ejecuta todos los días a las 10:00 AM UTC (ajústalo a tu zona horaria)
+    - cron: '0 10 * * *'
+  # Permite ejecutarlo manualmente desde la pestaña Actions (para pruebas)
+  workflow_dispatch:
+
+jobs:
+  update-arena:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+      
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+      
+      - name: Ejecutar script de actualización
+        env:
+          ARENA_WRITE_TOKEN: ${{ secrets.ARENA_WRITE_TOKEN }}
+          CHANNEL_SLUG: ${{ secrets.CHANNEL_SLUG }}
+          REDDIT_SUBREDDIT: ${{ secrets.REDDIT_SUBREDDIT }}
+        run: |
+          python update_channel.py
