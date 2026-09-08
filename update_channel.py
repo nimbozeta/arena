@@ -15,49 +15,48 @@ LIMIT = 50  # Número de imágenes a obtener y subir
 # ==============================================================
 # 1. OBTENER IMÁGENES DE REDDIT (usando JSON público)
 # ==============================================================
+import xml.etree.ElementTree as ET
+
 def fetch_reddit_images(subreddit, limit=50):
     """
-    Obtiene URLs de imágenes de un subreddit público.
-    Usa el endpoint .json que no requiere autenticación.
-    Filtra por extensiones de imagen y evita enlaces duplicados.
+    Obtiene URLs de imágenes de un subreddit usando su feed RSS.
+    No requiere autenticación y evita el bloqueo 403.
     """
-    url = f"https://www.reddit.com/r/{subreddit}/hot.json?limit={limit * 2}"  # Pedimos más por si algunos no sirven
+    # Usamos el feed RSS del subreddit (hot)
+    url = f"https://www.reddit.com/r/{subreddit}/.rss"
     headers = {'User-Agent': 'Mozilla/5.0 (compatible; Bot/1.0)'}
     
     try:
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
-        data = response.json()
+        
+        # Parsear el XML del feed RSS
+        root = ET.fromstring(response.content)
+        
+        # Namespace de RSS
+        ns = {'': 'http://www.w3.org/2005/Atom'}
         
         image_urls = []
-        for post in data.get('data', {}).get('children', []):
-            post_data = post.get('data', {})
-            # Intentar obtener la imagen de la vista previa (mejor resolución)
-            preview = post_data.get('preview', {})
-            images = preview.get('images', [])
-            if images:
-                # La URL más grande suele estar en source o resolutions
-                source_url = images[0].get('source', {}).get('url', '')
-                if source_url:
-                    # Reddit devuelve URLs con '&amp;' que debemos reemplazar
-                    source_url = source_url.replace('&amp;', '&')
-                    if any(ext in source_url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif']):
-                        image_urls.append(source_url)
-                        continue
-            
-            # Fallback: url del post directa (si es imagen)
-            direct_url = post_data.get('url', '')
-            if direct_url and any(ext in direct_url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif']):
-                image_urls.append(direct_url)
+        for entry in root.findall('.//entry', ns):
+            # Buscar enlaces dentro del contenido HTML de la entrada
+            content = entry.find('content', ns)
+            if content is not None and content.text:
+                # Buscar URLs de imágenes en el contenido HTML
+                # Patrón simple: buscar src="..." que apunte a i.redd.it o external-preview
+                import re
+                img_pattern = r'src="(https?://[^"]+\.(?:jpg|jpeg|png|gif))"'
+                found = re.findall(img_pattern, content.text)
+                for img_url in found:
+                    # Limpiar URLs (eliminar parámetros extra)
+                    img_url = img_url.split('?')[0]
+                    if img_url not in image_urls:
+                        image_urls.append(img_url)
         
-        # Eliminar duplicados y limitar
-        unique_urls = list(dict.fromkeys(image_urls))
-        return unique_urls[:limit]
+        return image_urls[:limit]
     
     except Exception as e:
-        print(f"❌ Error al obtener imágenes de Reddit: {e}")
+        print(f"❌ Error al obtener imágenes desde RSS: {e}")
         return []
-
 # ==============================================================
 # 2. CONECTAR CON ARENA (leer, eliminar, subir)
 # ==============================================================
