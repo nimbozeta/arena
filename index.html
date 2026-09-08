@@ -133,23 +133,46 @@
             border-radius: 20px;
         }
 
-        /* Indicador de estado (opcional) */
+        /* Badge de estado */
         #status-badge {
             position: fixed;
             top: 20px;
             right: 20px;
-            color: rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.6);
             font-family: monospace;
             font-size: 0.7rem;
             z-index: 999;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 4px 12px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 6px 14px;
             border-radius: 20px;
             pointer-events: none;
             letter-spacing: 0.5px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 300px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        /* RESPONSIVE: fuentes más pequeñas en móviles */
+        /* Mensaje de carga / error */
+        #loading-msg {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 1.2rem;
+            background: rgba(0,0,0,0.8);
+            padding: 20px 40px;
+            border-radius: 12px;
+            z-index: 1000;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(4px);
+        }
+
+        /* RESPONSIVE */
         @media (max-width: 600px) {
             .meme-text {
                 font-size: 8vw;
@@ -166,20 +189,31 @@
             #duration-slider {
                 width: 100px;
             }
+            #status-badge {
+                font-size: 0.6rem;
+                top: 10px;
+                right: 10px;
+                padding: 4px 10px;
+                white-space: normal;
+                max-width: 200px;
+            }
         }
     </style>
 </head>
 <body>
 
+    <!-- MENSAJE DE CARGA (se oculta automáticamente) -->
+    <div id="loading-msg">⏳ Cargando desde Are.na...</div>
+
     <!-- CONTENEDOR DEL MEME -->
     <div id="meme-container">
         <img id="bg-image" src="" alt="Fondo" />
-        <div id="top-text" class="meme-text">TEXTO SUPERIOR</div>
-        <div id="bottom-text" class="meme-text">TEXTO INFERIOR</div>
+        <div id="top-text" class="meme-text">...</div>
+        <div id="bottom-text" class="meme-text">...</div>
     </div>
 
     <!-- BADGE DE ESTADO -->
-    <div id="status-badge">● MOCK DATA · CICLO ACTIVO</div>
+    <div id="status-badge">● Conectando a Are.na...</div>
 
     <!-- CONTROLES DE USUARIO -->
     <div id="controls">
@@ -189,140 +223,259 @@
     </div>
 
     <script>
-        // --------------------------------------------------------------
-        // 1. DATOS DE PRUEBA (MOCK) - Reemplazaremos con Are.na en Fase 2
-        // --------------------------------------------------------------
-        const MOCK_IMAGES = [
-            'https://picsum.photos/seed/a1/1920/1080',
-            'https://picsum.photos/seed/b2/1920/1080',
-            'https://picsum.photos/seed/c3/1920/1080',
-            'https://picsum.photos/seed/d4/1920/1080',
-            'https://picsum.photos/seed/e5/1920/1080',
-        ];
+        // ===========================================================
+        //  CONFIGURACIÓN - REEMPLAZA ESTOS VALORES CON LOS TUYOS
+        // ===========================================================
+        const ARENA_TOKEN = 'u_FYBrC3jPdI7ZUGRX9AWCzBo7-uGfEIZGJpf2itDNc'; //
+        const CHANNEL_SLUG = 'mi-canal-prueba'; // <-- Ej: 'mi-canal-prueba'
 
-        const MOCK_TOP_TEXTS = [
-            'EL ARTE ES LA MENTIRA',
-            'LA NATURALEZA NO TIENE PRISA',
-            'TODO LO SÓLIDO SE DESVANECE',
-            'EL FUTURO YA ESTÁ AQUÍ',
-            'LA MEMORIA ES UN BOSQUE',
-        ];
+        // ===========================================================
+        //  ESTADO GLOBAL
+        // ===========================================================
+        let imageBlocks = [];      // Lista de URLs de imágenes
+        let textBlocks = [];      // Lista de textos
+        let isDataReady = false;
+        let currentInterval = null;
+        let currentDuration = 20; // segundos (se actualiza con el slider)
+        let currentIndex = 0;
 
-        const MOCK_BOTTOM_TEXTS = [
-            'QUE NOS AYUDA A VER LA VERDAD',
-            'PERO TODO SE TRANSFORMA',
-            'EN EL AIRE DE LA NOCHE',
-            'SOLO QUE NO ESTÁ REPARTIDO',
-            'QUE CAMBIA CON CADA RESPIRACIÓN',
-        ];
-
-        // --------------------------------------------------------------
-        // 2. REFERENCIAS AL DOM
-        // --------------------------------------------------------------
+        // Referencias DOM
         const bgImage = document.getElementById('bg-image');
         const topText = document.getElementById('top-text');
         const bottomText = document.getElementById('bottom-text');
         const slider = document.getElementById('duration-slider');
         const display = document.getElementById('duration-display');
+        const statusBadge = document.getElementById('status-badge');
+        const loadingMsg = document.getElementById('loading-msg');
 
-        // Variables de estado
-        let currentInterval = null;
-        let currentDuration = parseInt(slider.value, 10); // segundos
-        let currentIndex = 0;
+        // ===========================================================
+        //  FUNCIÓN PARA OBTENER DATOS DE ARENA
+        // ===========================================================
+        async function fetchArenaData() {
+            try {
+                statusBadge.textContent = '⏳ Consultando API de Are.na...';
+                
+                // La API devuelve hasta 100 bloques por defecto. 
+                // Si tu canal tiene más, añadiremos paginación más adelante (Fase 6).
+                const url = `https://api.are.na/v2/channels/${CHANNEL_SLUG}?per=100`;
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${ARENA_TOKEN}`,
+                        'Accept': 'application/json'
+                    }
+                });
 
-        // --------------------------------------------------------------
-        // 3. FUNCIÓN PARA ACTUALIZAR UN FOTOGRAMA (con fade)
-        // --------------------------------------------------------------
+                // Manejo de errores HTTP
+                if (!response.ok) {
+                    let errorMsg = `Error ${response.status}`;
+                    if (response.status === 401) errorMsg = 'Token inválido o revocado. Verifica tu token.';
+                    if (response.status === 404) errorMsg = `Canal "${CHANNEL_SLUG}" no encontrado.`;
+                    if (response.status === 429) errorMsg = 'Demasiadas peticiones. Espera un momento.';
+                    throw new Error(errorMsg);
+                }
+
+                const data = await response.json();
+                
+                // Verificar que el canal tiene contenido
+                if (!data.contents || data.contents.length === 0) {
+                    throw new Error('El canal está vacío o no tiene bloques visibles.');
+                }
+
+                // === FILTRADO POR TIPO ===
+                const rawBlocks = data.contents;
+                const images = [];
+                const texts = [];
+
+                for (const block of rawBlocks) {
+                    // Bloque de imagen
+                    if (block.class === 'Image' && block.image && block.image.display) {
+                        // Usamos 'display.url' para tamaño óptimo, o 'original.url' para máxima resolución
+                        const imgUrl = block.image.display.url || block.image.original.url;
+                        if (imgUrl) images.push(imgUrl);
+                    }
+                    
+                    // Bloque de texto
+                    if (block.class === 'Text' && block.content) {
+                        const cleanText = block.content.trim();
+                        if (cleanText.length > 0) texts.push(cleanText);
+                    }
+                }
+
+                // Guardar en el estado global
+                imageBlocks = images;
+                textBlocks = texts;
+
+                // Validar que haya al menos una imagen
+                if (imageBlocks.length === 0) {
+                    throw new Error('No se encontraron bloques de imagen en el canal.');
+                }
+
+                isDataReady = true;
+                statusBadge.textContent = `✅ ${imageBlocks.length} imágenes · ${textBlocks.length} textos · Canal: ${CHANNEL_SLUG}`;
+                loadingMsg.style.display = 'none';
+                console.log(`📸 Imágenes cargadas: ${imageBlocks.length}`);
+                console.log(`📝 Textos cargados: ${textBlocks.length}`);
+
+            } catch (error) {
+                console.error('❌ Error en fetchArenaData:', error);
+                loadingMsg.innerHTML = `❌ Error: ${error.message}<br><small>Revisa token, slug o conexión.</small>`;
+                statusBadge.textContent = '⚠️ Error - Revisa consola';
+                // Dejamos los arrays vacíos para que el ciclo no intente usarlos
+                imageBlocks = [];
+                textBlocks = [];
+                isDataReady = false;
+            }
+        }
+
+        // ===========================================================
+        //  FUNCIÓN PARA SELECCIONAR UN PAR ALEATORIO
+        // ===========================================================
+        function getRandomPair() {
+            // Si no hay imágenes, usamos un placeholder de emergencia
+            if (imageBlocks.length === 0) {
+                return {
+                    image: 'https://via.placeholder.com/1920x1080/222/555?text=Sin+Imagen',
+                    top: 'SIN IMAGEN',
+                    bottom: 'Revisa el canal de Are.na'
+                };
+            }
+
+            // Seleccionar imagen aleatoria
+            const imgIndex = Math.floor(Math.random() * imageBlocks.length);
+            const selectedImage = imageBlocks[imgIndex];
+
+            // Seleccionar texto aleatorio (si hay). Si no, usamos textos por defecto.
+            let selectedTop = 'SIN TEXTO DISPONIBLE';
+            let selectedBottom = 'Agrega bloques de texto al canal';
+
+            if (textBlocks.length > 0) {
+                const txtIndex = Math.floor(Math.random() * textBlocks.length);
+                const fullText = textBlocks[txtIndex];
+                
+                // Dividir el texto en dos partes (opcional).
+                // Como es estilo meme, partimos por el primer punto o salto de línea.
+                // Si no tiene separador, usamos el texto completo en la parte superior y dejamos la inferior vacía.
+                const separator = fullText.includes('. ') ? '. ' : (fullText.includes('\n') ? '\n' : null);
+                if (separator) {
+                    const parts = fullText.split(separator);
+                    selectedTop = parts[0].trim();
+                    // Si hay más de una parte, unimos el resto para la parte inferior
+                    if (parts.length > 1) {
+                        selectedBottom = parts.slice(1).join(separator).trim();
+                    } else {
+                        selectedBottom = '...';
+                    }
+                } else {
+                    selectedTop = fullText;
+                    selectedBottom = '...';
+                }
+
+                // Limitar longitud para no romper el diseño
+                if (selectedTop.length > 120) selectedTop = selectedTop.slice(0, 117) + '...';
+                if (selectedBottom.length > 120) selectedBottom = selectedBottom.slice(0, 117) + '...';
+            }
+
+            return {
+                image: selectedImage,
+                top: selectedTop.toUpperCase(),
+                bottom: selectedBottom.toUpperCase()
+            };
+        }
+
+        // ===========================================================
+        //  FUNCIÓN PARA ACTUALIZAR UN FOTOGRAMA (con fade)
+        // ===========================================================
         function updateFrame() {
-            // Elegir siguiente índice (cíclico)
-            currentIndex = (currentIndex + 1) % MOCK_IMAGES.length;
+            if (!isDataReady && imageBlocks.length === 0) {
+                // Si los datos no están listos, reintentamos (solo una vez)
+                console.warn('Datos no listos, reintentando fetch...');
+                fetchArenaData().then(() => {
+                    if (isDataReady) updateFrame();
+                });
+                return;
+            }
 
-            // Obtener datos del nuevo frame
-            const newImageUrl = MOCK_IMAGES[currentIndex];
-            const newTop = MOCK_TOP_TEXTS[currentIndex % MOCK_TOP_TEXTS.length];
-            const newBottom = MOCK_BOTTOM_TEXTS[currentIndex % MOCK_BOTTOM_TEXTS.length];
-
-            // --- Efecto de fade out/in ---
-            // Paso 1: Bajar opacidad de imagen y textos
+            const pair = getRandomPair();
+            
+            // Efecto de fade out
             bgImage.style.opacity = '0';
             topText.style.opacity = '0';
             bottomText.style.opacity = '0';
 
-            // Paso 2: Después de 400ms (mitad del fade), cambiar el contenido
             setTimeout(() => {
-                bgImage.src = newImageUrl;
-                topText.textContent = newTop;
-                bottomText.textContent = newBottom;
-
-                // Paso 3: Subir opacidad (fade in)
+                bgImage.src = pair.image;
+                topText.textContent = pair.top;
+                bottomText.textContent = pair.bottom;
+                
+                // Fade in
                 bgImage.style.opacity = '1';
                 topText.style.opacity = '1';
                 bottomText.style.opacity = '1';
             }, 400);
         }
 
-        // --------------------------------------------------------------
-        // 4. INICIALIZACIÓN DEL PRIMER FOTOGRAMA (sin fade al inicio)
-        // --------------------------------------------------------------
+        // ===========================================================
+        //  INICIALIZACIÓN DEL PRIMER FOTOGRAMA
+        // ===========================================================
         function setInitialFrame() {
-            currentIndex = 0;
-            bgImage.src = MOCK_IMAGES[0];
+            if (!isDataReady && imageBlocks.length === 0) {
+                // Si no hay datos, mostramos mensaje de espera
+                bgImage.src = 'https://via.placeholder.com/1920x1080/222/444?text=Cargando...';
+                topText.textContent = 'CARGANDO...';
+                bottomText.textContent = 'DESDE ARE.NA';
+                return;
+            }
+            const pair = getRandomPair();
+            bgImage.src = pair.image;
             bgImage.style.opacity = '1';
-            topText.textContent = MOCK_TOP_TEXTS[0];
+            topText.textContent = pair.top;
             topText.style.opacity = '1';
-            bottomText.textContent = MOCK_BOTTOM_TEXTS[0];
+            bottomText.textContent = pair.bottom;
             bottomText.style.opacity = '1';
         }
 
-        // --------------------------------------------------------------
-        // 5. GESTIÓN DEL CICLO (iniciar / reiniciar)
-        // --------------------------------------------------------------
+        // ===========================================================
+        //  GESTIÓN DEL CICLO (iniciar / reiniciar)
+        // ===========================================================
         function startCycle(durationSeconds) {
-            // Limpiar intervalo anterior si existe
             if (currentInterval) {
                 clearInterval(currentInterval);
                 currentInterval = null;
             }
-
-            // Si la duración es menor a 1, no arrancamos (seguridad)
             const ms = Math.max(durationSeconds * 1000, 1000);
-
-            // Programar el primer cambio después de 'durationSeconds'
-            // (el intervalo llama a updateFrame)
             currentInterval = setInterval(updateFrame, ms);
-
-            // Actualizar badge (opcional)
-            document.getElementById('status-badge').textContent =
-                `● MOCK · CICLO ${durationSeconds}s`;
+            statusBadge.textContent = statusBadge.textContent.replace(/· \d+s$/, '') + ` · ${durationSeconds}s`;
         }
 
-        // --------------------------------------------------------------
-        // 6. MANEJADOR DEL SLIDER (cambio en tiempo real)
-        // --------------------------------------------------------------
+        // ===========================================================
+        //  MANEJADOR DEL SLIDER
+        // ===========================================================
         slider.addEventListener('input', function() {
             const val = parseInt(this.value, 10);
             currentDuration = val;
             display.textContent = val + 's';
-
-            // Reiniciamos el ciclo con la nueva duración
-            // (esto hace que el cambio sea inmediato, sin esperar al tick actual)
             startCycle(currentDuration);
         });
 
-        // --------------------------------------------------------------
-        // 7. ARRANQUE DE LA PIEZA
-        // --------------------------------------------------------------
-        // Poner el primer frame
-        setInitialFrame();
+        // ===========================================================
+        //  ARRANQUE DE LA PIEZA (ASYNC)
+        // ===========================================================
+        async function init() {
+            // Primero cargar datos de Are.na
+            await fetchArenaData();
+            
+            // Poner el primer frame (con o sin datos)
+            setInitialFrame();
+            
+            // Iniciar ciclo con la duración por defecto (20s)
+            startCycle(currentDuration);
+            
+            console.log('✅ Fase 2 completada. Conectado a Are.na.');
+        }
 
-        // Iniciar ciclo con la duración por defecto (20s)
-        startCycle(currentDuration);
-
-        // Log en consola para verificar que todo está bien
-        console.log('✅ Fase 1 completada. Mock data corriendo. Duración configurable.');
-        console.log(`📸 Imágenes mock: ${MOCK_IMAGES.length}`);
-        console.log(`📝 Textos mock: ${MOCK_TOP_TEXTS.length} top / ${MOCK_BOTTOM_TEXTS.length} bottom`);
-        console.log('⏱️ Mueve el slider para cambiar la duración en tiempo real.');
+        // Ejecutar
+        init();
     </script>
 </body>
 </html>
