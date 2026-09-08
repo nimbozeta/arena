@@ -27,6 +27,5 @@ jobs:
         env:
           ARENA_WRITE_TOKEN: ${{ secrets.ARENA_WRITE_TOKEN }}
           CHANNEL_SLUG: ${{ secrets.CHANNEL_SLUG }}
-          REDDIT_SUBREDDIT: ${{ secrets.REDDIT_SUBREDDIT }}
         run: |
           python update_channel.py
