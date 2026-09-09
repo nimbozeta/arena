@@ -5,8 +5,6 @@ import requests
 import tempfile
 import sys
 
-# Añadir la carpeta modulos al path para poder importar
-sys.path.append(os.path.join(os.path.dirname(__file__), 'modulos'))
 from pdf_extractor import obtener_fragmentos
 from compositor import componer_meme
 
