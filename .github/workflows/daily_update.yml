@@ -4,6 +4,14 @@ on:
   schedule:
     - cron: '0 10 * * *'
   workflow_dispatch:
+    inputs:
+      modo_diagnostico:
+        description: 'Ejecutar solo test_token.py (sin tocar el canal)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
 
 jobs:
   update-arena:
@@ -18,14 +26,38 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Instalar dependencias
+      # ----- NUEVO PASO: Instalar la fuente oficial -----
+      - name: Instalar fuentes y preparar assets
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-liberation
+          mkdir -p assets
+          cp /usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf assets/
+
+      - name: Instalar dependencias Python
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests pillow pymupdf
 
-      - name: Ejecutar script de actualización
+      - name: Ejecutar actualización (o diagnóstico)
+        id: run_update
         env:
           ARENA_WRITE_TOKEN: ${{ secrets.ARENA_WRITE_TOKEN }}
-          CHANNEL_SLUG: ${{ secrets.CHANNEL_SLUG }}
+          CHANNEL_SLUG: 'mi-canal-prueba'
         run: |
-          python test_token.py
+          if [ "${{ inputs.modo_diagnostico }}" = "true" ]; then
+            python test_token.py
+          else
+            python update_channel.py | tee resultado.txt
+            echo "resumen=$(grep RESUMEN:: resultado.txt | cut -d':' -f3-)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Registrar resultado y mantener actividad del repositorio
+        if: ${{ inputs.modo_diagnostico != true }}
+        run: |
+          echo "$(date -u '+%Y-%m-%d %H:%M UTC') - ${{ steps.run_update.outputs.resumen }}" >> log.txt
+          git config user.name "bot-actualizador"
+          git config user.email "bot@example.invalid"
+          git add log.txt estado/historial_fragmentos.json || true
+          git commit -m "Actualización diaria: ${{ steps.run_update.outputs.resumen }}" || echo "Sin cambios que commitear"
+          git push
